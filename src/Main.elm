@@ -44,7 +44,7 @@ init _ =
       , groundSpaceR = 8
       , nrEdges = 300
       }
-    , Random.generate NewPoints (randomPoints 100)
+    , Random.generate NewPoints (randomPoints 200)
     )
 
 
@@ -175,6 +175,7 @@ type Msg
     = NewPoints (List Point)
     | CanvasSizeChange String
     | GroundSpaceRChange String
+    | AvgDegChange String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -207,6 +208,16 @@ update msg model =
             , Cmd.none
             )
 
+        AvgDegChange input ->
+            let 
+                n = toFloat (List.length model.points)
+                avgDeg = 
+                    withDefault (2 * toFloat model.nrEdges / n) (String.toFloat input)
+            in
+            ( { model 
+              | nrEdges = floor (avgDeg * n / 2)}
+            , Cmd.none)
+
 
 
 -- SUBSCRIPTIONS
@@ -236,10 +247,18 @@ slider min max step val msg =
 
 view : Model -> Html Msg
 view model =
+    let 
+        n = toFloat (List.length model.points)
+        avgDeg = 2 * toFloat model.nrEdges / n
+    in
     div []
         [ div []
             [ slider 200 1200 1 model.canvasSize CanvasSizeChange
             , text "Canvas Size"
+            ]
+        ,div []
+            [ slider 2 16 0.2 avgDeg AvgDegChange
+            , text ("Avg Deg (" ++ String.fromFloat(avgDeg) ++ ")")
             ]
         , div []
             [ slider 0 1 0.01 (logBase 20 (model.groundSpaceR + 0.9999)) GroundSpaceRChange
