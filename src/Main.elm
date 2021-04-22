@@ -2,12 +2,12 @@ module Main exposing (..)
 
 import Browser
 import Html exposing (Html, div, input, text)
-import Html.Attributes exposing (max, min, type_, value)
+import Html.Attributes exposing (type_, value)
 import Html.Events exposing (onInput)
 import Maybe exposing (withDefault)
 import Random
 import Svg exposing (circle, svg)
-import Svg.Attributes exposing (cx, cy, fill, height, r, stroke, viewBox, width)
+import Svg.Attributes exposing (cx, cy, fill, height, r, stroke, viewBox, width, x1, x2, y1, y2)
 
 
 
@@ -29,23 +29,53 @@ main =
 
 type alias Model =
     { points : List Point
+    , pointPairs : List ( Point, Point )
     , canvasSize : Float
     , groundSpaceR : Float
+    , nrEdges : Int
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { points = []
+      , pointPairs = []
       , canvasSize = 1000
-      , groundSpaceR = 10
+      , groundSpaceR = 8
+      , nrEdges = 300
       }
-    , Random.generate NewPoints (randomPoints 50)
+    , Random.generate NewPoints (randomPoints 100)
     )
 
 
+sortedPairs : Float -> List Point -> List ( Point, Point )
+sortedPairs groundSpaceR points =
+    let
+        toH : Point -> PointH
+        toH =
+            toPointH groundSpaceR
 
--- MODEL: points
+        pairDist : ( Point, Point ) -> Float
+        pairDist pair =
+            dist (toH (Tuple.first pair)) (toH (Tuple.second pair))
+
+        filter : ( Point, Point ) -> Bool
+        filter pair =
+            (Tuple.first pair).phi < (Tuple.second pair).phi
+
+        pairs : List ( Point, Point )
+        pairs =
+            List.filter filter
+                (List.concatMap
+                    (\p1 -> List.map (\p2 -> ( p1, p2 )) points)
+                    points
+                )
+    in
+    List.sortBy pairDist pairs
+
+
+
+-- POINTS
 
 
 type alias Point =
@@ -89,9 +119,9 @@ toPointR canvasSize groundSpaceR point =
         offset : Float
         offset =
             canvasSize / 2
-        
+
         p : PointH
-        p = 
+        p =
             toPointH groundSpaceR point
     in
     { x = offset + offset * p.r / groundSpaceR * cos p.phi
@@ -110,6 +140,11 @@ toPointH groundSpaceR point =
 -- HYPERBOLIC MATH
 
 
+sinh : Float -> Float
+sinh x =
+    (e ^ x - e ^ -x) / 2
+
+
 cosh : Float -> Float
 cosh x =
     (e ^ x + e ^ -x) / 2
@@ -118,6 +153,18 @@ cosh x =
 acosh : Float -> Float
 acosh x =
     logBase e (x + sqrt (x - 1) * sqrt (x + 1))
+
+
+dist : PointH -> PointH -> Float
+dist p1 p2 =
+    let
+        diff =
+            abs (p1.phi - p2.phi)
+
+        deltaPhi =
+            min diff (2 * pi - diff)
+    in
+    acosh (cosh p1.r * cosh p2.r - sinh p1.r * sinh p2.r * cos deltaPhi)
 
 
 
@@ -134,7 +181,10 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewPoints newPoints ->
-            ( { model | points = newPoints }
+            ( { model
+                | points = newPoints
+                , pointPairs = sortedPairs model.groundSpaceR newPoints
+              }
             , Cmd.none
             )
 
@@ -145,9 +195,14 @@ update msg model =
             , Cmd.none
             )
 
-        GroundSpaceRChange newValue ->
+        GroundSpaceRChange input ->
+            let
+                inputF =
+                    withDefault model.groundSpaceR (String.toFloat input)
+            in
             ( { model
-                | groundSpaceR = withDefault model.groundSpaceR (String.toFloat newValue)
+                | groundSpaceR = 20 ^ inputF - 0.9999
+                , pointPairs = sortedPairs model.groundSpaceR model.points
               }
             , Cmd.none
             )
@@ -183,12 +238,16 @@ view : Model -> Html Msg
 view model =
     div []
         [ div []
-            [ text "Canvas Size"
-            , slider 200 1200 1 model.canvasSize CanvasSizeChange
+            [ slider 200 1200 1 model.canvasSize CanvasSizeChange
+            , text "Canvas Size"
             ]
         , div []
-            [ text "Ground Space Radius"
-            , slider 0.2 25 0.2 model.groundSpaceR GroundSpaceRChange
+            [ slider 0 1 0.01 (logBase 20 (model.groundSpaceR + 0.9999)) GroundSpaceRChange
+            , text
+                ("Ground Space Radius ("
+                    ++ String.fromFloat model.groundSpaceR
+                    ++ ")"
+                )
             ]
         , div []
             [ canvas model.canvasSize
@@ -196,6 +255,9 @@ view model =
                     :: List.map
                         (drawPoint model.canvasSize model.groundSpaceR)
                         model.points
+                    ++ List.map
+                        (drawLine model.canvasSize model.groundSpaceR)
+                        (List.take model.nrEdges model.pointPairs)
                 )
             ]
         ]
@@ -227,6 +289,31 @@ drawPoint canvasSize groundSpaceR point =
         [ cx (String.fromFloat xy.x)
         , cy (String.fromFloat xy.y)
         , r "3"
+        ]
+        []
+
+
+drawLine : Float -> Float -> ( Point, Point ) -> Svg.Svg msg
+drawLine canvasSize groundSpaceR points =
+    let
+        p1 =
+            Tuple.first points
+
+        p2 =
+            Tuple.second points
+
+        xy1 =
+            toPointR canvasSize groundSpaceR p1
+
+        xy2 =
+            toPointR canvasSize groundSpaceR p2
+    in
+    Svg.line
+        [ x1 (String.fromFloat xy1.x)
+        , y1 (String.fromFloat xy1.y)
+        , x2 (String.fromFloat xy2.x)
+        , y2 (String.fromFloat xy2.y)
+        , stroke "black"
         ]
         []
 
