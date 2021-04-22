@@ -49,11 +49,26 @@ init _ =
 
 
 type alias Point =
-    -- rVirt: virtual radius in [0, 1] such that the area of a disk
-    -- with radius rVirt relative to the ground space is rVirt
+    -- Point in polar coordinates with virtual radius rVirt.  Virtual
+    -- radius means that rVirt ∈ [0, 1] represents a radius such that
+    -- the relative area (w.r.t. the ground space) of a disk with
+    -- radius rVirt is rVirt.
     { rVirt : Float
+    , phi : Float
+    }
 
-    -- phi: angle in [0, 2 * pi]
+
+type alias PointR =
+    -- Point in Cartesian coordinates in R² (coordinate system of the
+    -- svg output)
+    { x : Float
+    , y : Float
+    }
+
+
+type alias PointH =
+    -- Point in hyperbolic polar coordinates.
+    { r : Float
     , phi : Float
     }
 
@@ -68,23 +83,26 @@ randomPoints n =
     Random.list n randomPoint
 
 
-type alias XyPoint =
-    { x : Float
-    , y : Float
+toPointR : Float -> Float -> Point -> PointR
+toPointR canvasSize groundSpaceR point =
+    let
+        offset : Float
+        offset =
+            canvasSize / 2
+        
+        p : PointH
+        p = 
+            toPointH groundSpaceR point
+    in
+    { x = offset + offset * p.r / groundSpaceR * cos p.phi
+    , y = offset + offset * p.r / groundSpaceR * sin p.phi
     }
 
 
-xyPoint : Float -> Float -> Point -> XyPoint
-xyPoint canvasSize groundSpaceR point =
-    let
-        offset =
-            canvasSize / 2
-
-        r =
-            acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
-    in
-    { x = offset + offset * r / groundSpaceR * cos point.phi
-    , y = offset + offset * r / groundSpaceR * sin point.phi
+toPointH : Float -> Point -> PointH
+toPointH groundSpaceR point =
+    { r = acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
+    , phi = point.phi
     }
 
 
@@ -109,6 +127,7 @@ acosh x =
 type Msg
     = NewPoints (List Point)
     | CanvasSizeChange String
+    | GroundSpaceRChange String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -122,6 +141,13 @@ update msg model =
         CanvasSizeChange newValue ->
             ( { model
                 | canvasSize = withDefault model.canvasSize (String.toFloat newValue)
+              }
+            , Cmd.none
+            )
+
+        GroundSpaceRChange newValue ->
+            ( { model
+                | groundSpaceR = withDefault model.groundSpaceR (String.toFloat newValue)
               }
             , Cmd.none
             )
@@ -140,19 +166,29 @@ subscriptions model =
 -- VIEW
 
 
+slider : Float -> Float -> Float -> Float -> (String -> Msg) -> Html Msg
+slider min max step val msg =
+    input
+        [ type_ "range"
+        , Html.Attributes.min (String.fromFloat min)
+        , Html.Attributes.max (String.fromFloat max)
+        , Html.Attributes.step (String.fromFloat step)
+        , value (String.fromFloat val)
+        , onInput msg
+        ]
+        []
+
+
 view : Model -> Html Msg
 view model =
     div []
         [ div []
-            [ text "test"
-            , input
-                [ type_ "range"
-                , Html.Attributes.min "200"
-                , Html.Attributes.max "1200"
-                , value (String.fromFloat model.canvasSize)
-                , onInput CanvasSizeChange
-                ]
-                []
+            [ text "Canvas Size"
+            , slider 200 1200 1 model.canvasSize CanvasSizeChange
+            ]
+        , div []
+            [ text "Ground Space Radius"
+            , slider 0.2 25 0.2 model.groundSpaceR GroundSpaceRChange
             ]
         , div []
             [ canvas model.canvasSize
@@ -185,7 +221,7 @@ drawPoint : Float -> Float -> Point -> Svg.Svg msg
 drawPoint canvasSize groundSpaceR point =
     let
         xy =
-            xyPoint canvasSize groundSpaceR point
+            toPointR canvasSize groundSpaceR point
     in
     Svg.circle
         [ cx (String.fromFloat xy.x)
