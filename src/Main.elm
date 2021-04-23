@@ -126,7 +126,7 @@ toPoint canvasSize groundSpaceR point =
             acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
 
         offset =
-            (toFloat canvasSize) / 2
+            toFloat canvasSize / 2
 
         x =
             offset + offset * r / groundSpaceR * cos point.phi
@@ -217,11 +217,12 @@ update msg model =
             { model | avgDeg = avgDeg } |> noCmd
 
         InputGroundSpaceR x ->
-            { model | groundSpaceR = 20 ^ x - 0.9999 } |> updatePoints |> noCmd
+            { model | groundSpaceR = inputToGroundSpaceR x } |> updatePoints |> noCmd
 
 
 
 -- VIEW
+
 
 formatFloat : Float -> String
 formatFloat x =
@@ -231,6 +232,7 @@ formatFloat x =
 sliderInt : String -> Int -> (Int -> Int) -> (Float -> Msg) -> Int -> Int -> Int -> Element Msg
 sliderInt label value valueFun msg min max step =
     mySlider label (toFloat (valueFun value)) (String.fromInt value) msg (toFloat min) (toFloat max) (Just (toFloat step))
+
 
 sliderFloat : String -> Float -> (Float -> Float) -> (Float -> Msg) -> Float -> Float -> Element Msg
 sliderFloat label value valueFun msg min max =
@@ -258,6 +260,17 @@ mySlider label value stringValue msg min max step =
             )
         ]
 
+
+inputToGroundSpaceR : Float -> Float
+inputToGroundSpaceR input =
+    20.9999 ^ input - 0.9999
+
+
+groundSpaceRToInput : Float -> Float
+groundSpaceRToInput r =
+    logBase 20.9999 (r + 0.9999)
+
+
 viewNew : Model -> Html Msg
 viewNew model =
     let
@@ -267,10 +280,10 @@ viewNew model =
     layout []
         (row [ padding 10, spacing 20 ]
             [ column [ alignTop, spacing 10 ]
-                [ sliderInt "canvas size"  model.canvasSize identity InputCanvasSize 200 1200 1
+                [ sliderInt "canvas size" model.canvasSize identity InputCanvasSize 200 1200 1
                 , sliderInt "number of vertices" model.n identity InputNrVertices 10 maxN 1
                 , sliderFloat "average degree" model.avgDeg identity InputAvgDeg 2 16
-                , sliderFloat "ground space radius" model.groundSpaceR (\x -> logBase 20 (x + 0.9999)) InputGroundSpaceR 0 1
+                , sliderFloat "ground space radius" model.groundSpaceR groundSpaceRToInput InputGroundSpaceR 0 1
                 ]
             , el []
                 (html
