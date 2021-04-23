@@ -64,22 +64,16 @@ init _ =
     )
 
 
-sortedPairs : List Point -> List ( Point, Point )
-sortedPairs points =
-    let
-        filter : ( Point, Point ) -> Bool
-        filter pair =
-            (Tuple.first pair).phi < (Tuple.second pair).phi
-
-        pairs : List ( Point, Point )
-        pairs =
-            List.filter filter
-                (List.concatMap
-                    (\p1 -> List.map (\p2 -> ( p1, p2 )) points)
-                    points
-                )
-    in
-    List.sortBy pairDist pairs
+pairs : List a -> List ( a, a )
+pairs elements =
+    List.indexedMap
+        (\index elt1 ->
+            List.map
+                (\elt2 -> Tuple.pair elt1 elt2)
+                (List.drop (index + 1) elements)
+        )
+        elements
+        |> List.concat
 
 
 
@@ -125,19 +119,13 @@ toPoint canvasSize groundSpaceR point =
 
         offset =
             toFloat canvasSize / 2
-
-        x =
-            offset + offset * r / groundSpaceR * cos point.phi
-
-        y =
-            offset + offset * r / groundSpaceR * sin point.phi
     in
     { r = r
     , phi = point.phi
     , sinhR = sinh r
     , coshR = cosh r
-    , x = x
-    , y = y
+    , x = offset + offset * r / groundSpaceR * cos point.phi
+    , y = offset + offset * r / groundSpaceR * sin point.phi
     }
 
 
@@ -183,20 +171,42 @@ pairDist pair =
 
 type Msg
     = GeneratedPoints (List PointVirt)
-    | InputNrVertices Float
     | InputCanvasSize Float
+    | InputNrVertices Float
     | InputAvgDeg Float
     | InputGroundSpaceR Float
 
 
 updatePoints : Model -> Model
 updatePoints model =
-    let
-        points =
-            List.map (toPoint model.canvasSize model.groundSpaceR)
+    { model
+        | points =
+            List.map
+                (toPoint model.canvasSize model.groundSpaceR)
                 (List.take model.n model.pointsVirt)
-    in
-    { model | points = points, pointPairs = sortedPairs points } |> updateThresholdR
+    }
+        |> updatePointPairs
+
+
+updatePointPairs : Model -> Model
+updatePointPairs model =
+    { model | pointPairs = pairs model.points } |> updatePointPairOrder
+
+
+-- updatePointCoordinates : Model -> Model
+-- updatePointCoordinates model =
+--     { model
+--         | points =
+--             List.map
+--                 (toPoint model.canvasSize model.groundSpaceR)
+--                 (List.take model.n model.pointsVirt)
+--     }
+--         |> updatePointPairOrder
+
+
+updatePointPairOrder : Model -> Model
+updatePointPairOrder model =
+    { model | pointPairs = List.sortBy pairDist model.pointPairs } |> updateThresholdR
 
 
 updateThresholdR : Model -> Model
@@ -307,6 +317,7 @@ viewNew model =
                 , sliderInt "number of vertices" model.n identity InputNrVertices 10 maxN 1
                 , sliderFloat "average degree" model.avgDeg identity InputAvgDeg 2 16
                 , sliderFloat "ground space radius" model.groundSpaceR groundSpaceRToInput InputGroundSpaceR 0 1
+                , text (String.fromFloat (model.thresholdRadius / model.groundSpaceR))
                 ]
             , el []
                 (html
