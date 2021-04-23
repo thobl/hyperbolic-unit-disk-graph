@@ -3,10 +3,8 @@ module Main exposing (..)
 import Browser
 import Element exposing (..)
 import Element.Background as Background
-import Element.Border
-import Element.Input exposing (defaultThumb, labelLeft, labelRight, slider)
+import Element.Input exposing (defaultThumb, labelLeft, slider)
 import Html exposing (Html)
-import Maybe exposing (withDefault)
 import Random
 import Svg exposing (circle, line)
 import Svg.Attributes exposing (cx, cy, r, stroke, x1, x2, y1, y2)
@@ -55,7 +53,7 @@ init _ =
       , canvasSize = 1000
       , groundSpaceR = 8
       , avgDeg = 4
-      , n = 150
+      , n = 200
       , points = []
       , pointPairs = []
       , thresholdRadius = 1
@@ -169,14 +167,6 @@ pairDist pair =
 -- UPDATE
 
 
-type Msg
-    = GeneratedPoints (List PointVirt)
-    | InputCanvasSize Float
-    | InputNrVertices Float
-    | InputAvgDeg Float
-    | InputGroundSpaceR Float
-
-
 updatePoints : Model -> Model
 updatePoints model =
     { model
@@ -191,17 +181,6 @@ updatePoints model =
 updatePointPairs : Model -> Model
 updatePointPairs model =
     { model | pointPairs = pairs model.points } |> updatePointPairOrder
-
-
--- updatePointCoordinates : Model -> Model
--- updatePointCoordinates model =
---     { model
---         | points =
---             List.map
---                 (toPoint model.canvasSize model.groundSpaceR)
---                 (List.take model.n model.pointsVirt)
---     }
---         |> updatePointPairOrder
 
 
 updatePointPairOrder : Model -> Model
@@ -234,6 +213,14 @@ noCmd model =
     ( model, Cmd.none )
 
 
+type Msg
+    = GeneratedPoints (List PointVirt)
+    | InputCanvasSize Float
+    | InputNrVertices Float
+    | InputAvgDeg Float
+    | InputGroundSpaceR Float
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -257,51 +244,61 @@ update msg model =
 -- VIEW
 
 
-formatFloat : Float -> String
-formatFloat x =
-    String.fromFloat (toFloat (round (10000 * x)) / 10000)
-
-
-sliderInt : String -> Int -> (Int -> Int) -> (Float -> Msg) -> Int -> Int -> Int -> Element Msg
-sliderInt label value valueFun msg min max step =
-    mySlider label (toFloat (valueFun value)) (String.fromInt value) msg (toFloat min) (toFloat max) (Just (toFloat step))
-
-
-sliderFloat : String -> Float -> (Float -> Float) -> (Float -> Msg) -> Float -> Float -> Element Msg
-sliderFloat label value valueFun msg min max =
-    mySlider label (valueFun value) (formatFloat value) msg min max Nothing
-
-
-mySlider : String -> Float -> String -> (Float -> Msg) -> Float -> Float -> Maybe Float -> Element Msg
-mySlider label value stringValue msg min max step =
-    row [ spacing 10, width (px 500) ]
-        [ el [ alignLeft ] (text label)
-        , el [ alignRight ]
-            (slider
-                [ width (px 200)
-                , behindContent
-                    (el [ width fill, height (px 2), centerY, Background.color (rgb 0.5 0.5 0.5) ] none)
-                ]
-                { onChange = msg
-                , label = labelLeft [ centerY ] (text stringValue)
-                , min = min
-                , max = max
-                , step = step
-                , value = value
-                , thumb = defaultThumb
-                }
-            )
-        ]
-
-
 inputToGroundSpaceR : Float -> Float
 inputToGroundSpaceR input =
-    20.9999 ^ input - 0.9999
+    20.999 ^ input - 0.999
 
 
 groundSpaceRToInput : Float -> Float
 groundSpaceRToInput r =
-    logBase 20.9999 (r + 0.9999)
+    logBase 20.999 (r + 0.999)
+
+
+formatFloat : Float -> String
+formatFloat x =
+    String.fromFloat (toFloat (round (1000 * x)) / 1000)
+
+
+
+type alias SliderSettings =
+    { label : String
+    , onChange : Float -> Msg
+    , value : Float
+    , valueFun : Float -> Float
+    , min : Float
+    , max : Float
+    }
+
+
+mySlider : SliderSettings -> Element Msg
+mySlider s =
+    row [ spacing 10, width (px 500) ]
+        [ el [ alignLeft ] (text s.label)
+        , el [ alignRight ]
+            (slider
+                -- slider optics
+                [ width (px 200)
+                , behindContent
+                    (el
+                        [ width fill
+                        , height (px 2)
+                        , centerY
+                        , Background.color (rgb 0.5 0.5 0.5)
+                        ]
+                        none
+                    )
+                ]
+                -- slider functionality
+                { onChange = s.onChange
+                , label = labelLeft [ centerY ] (text (formatFloat s.value))
+                , min = s.min
+                , max = s.max
+                , step = Nothing
+                , value = s.valueFun s.value
+                , thumb = defaultThumb
+                }
+            )
+        ]
 
 
 viewNew : Model -> Html Msg
@@ -311,12 +308,40 @@ viewNew model =
             floor (toFloat model.n * model.avgDeg / 2)
     in
     layout []
-        (row [ padding 10, spacing 20 ]
+        (row [ padding 10, spacing 40 ]
             [ column [ alignTop, spacing 10 ]
-                [ sliderInt "canvas size" model.canvasSize identity InputCanvasSize 200 1200 1
-                , sliderInt "number of vertices" model.n identity InputNrVertices 10 maxN 1
-                , sliderFloat "average degree" model.avgDeg identity InputAvgDeg 2 16
-                , sliderFloat "ground space radius" model.groundSpaceR groundSpaceRToInput InputGroundSpaceR 0 1
+                [ mySlider
+                    { label = "canvas size"
+                    , onChange = InputCanvasSize
+                    , value = toFloat model.canvasSize
+                    , valueFun = identity
+                    , min = 200
+                    , max = 1200
+                    }
+                , mySlider
+                    { label = "number of vertices"
+                    , onChange = InputNrVertices
+                    , value = toFloat model.n
+                    , valueFun = identity
+                    , min = 10
+                    , max = toFloat maxN
+                    }
+                , mySlider
+                    { label = "average degree"
+                    , onChange = InputAvgDeg
+                    , value = model.avgDeg
+                    , valueFun = identity
+                    , min = 2
+                    , max = 16
+                    }
+                , mySlider
+                    { label = "ground space radius"
+                    , onChange = InputGroundSpaceR
+                    , value = model.groundSpaceR
+                    , valueFun = groundSpaceRToInput
+                    , min = 0
+                    , max = 1
+                    }
                 , text (String.fromFloat (model.thresholdRadius / model.groundSpaceR))
                 ]
             , el []
