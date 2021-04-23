@@ -56,7 +56,7 @@ init _ =
       , points = []
       , pointPairs = []
       }
-    , Random.generate NewPoints (randomPoints initialN)
+    , Random.generate NewPoints (randomPointsVirt initialN)
     )
 
 
@@ -109,14 +109,14 @@ type alias Point =
     }
 
 
-randomPoint : Random.Generator PointVirt
-randomPoint =
+randomPointVirt : Random.Generator PointVirt
+randomPointVirt =
     Random.map2 PointVirt (Random.float 0 1) (Random.float 0 (2 * pi))
 
 
-randomPoints : Int -> Random.Generator (List PointVirt)
-randomPoints n =
-    Random.list n randomPoint
+randomPointsVirt : Int -> Random.Generator (List PointVirt)
+randomPointsVirt n =
+    Random.list n randomPointVirt
 
 
 toPoint : Float -> Float -> PointVirt -> Point
@@ -240,7 +240,7 @@ update msg model =
                     withDefault model.n (String.toInt input)
             in
             ( { model | n = n }
-            , Random.generate NewPoints (randomPoints n)
+            , Random.generate NewPoints (randomPointsVirt n)
             )
 
 
