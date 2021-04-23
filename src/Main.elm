@@ -14,12 +14,13 @@ import Svg.Attributes exposing (cx, cy, fill, height, r, stroke, viewBox, width,
 -- MAIN
 
 
+main : Program () Model Msg
 main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = subscriptions
         , view = view
+        , subscriptions = always Sub.none
         }
 
 
@@ -28,15 +29,19 @@ main =
 
 
 type alias Model =
-    { points : List Point
-    , pointPairs : List ( Point, Point )
+    { points : List PointVirt
     , canvasSize : Float
     , groundSpaceR : Float
     , avgDeg : Float
     , n : Int
+
+    -- derived information
+    , pointsH : List PointH
+    , pointPairs : List ( PointH, PointH )
     }
 
 
+initialN : Int
 initialN =
     100
 
@@ -44,32 +49,29 @@ initialN =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { points = []
-      , pointPairs = []
       , canvasSize = 1000
       , groundSpaceR = 8
       , avgDeg = 4
       , n = initialN
+      , pointsH = []
+      , pointPairs = []
       }
     , Random.generate NewPoints (randomPoints initialN)
     )
 
 
-sortedPairs : Float -> List Point -> List ( Point, Point )
-sortedPairs groundSpaceR points =
+sortedPairs : List PointH -> List ( PointH, PointH )
+sortedPairs points =
     let
-        toH : Point -> PointH
-        toH =
-            toPointH groundSpaceR
-
-        pairDist : ( Point, Point ) -> Float
+        pairDist : ( PointH, PointH ) -> Float
         pairDist pair =
-            dist (toH (Tuple.first pair)) (toH (Tuple.second pair))
+            dist (Tuple.first pair) (Tuple.second pair)
 
-        filter : ( Point, Point ) -> Bool
+        filter : ( PointH, PointH ) -> Bool
         filter pair =
             (Tuple.first pair).phi < (Tuple.second pair).phi
 
-        pairs : List ( Point, Point )
+        pairs : List ( PointH, PointH )
         pairs =
             List.filter filter
                 (List.concatMap
@@ -84,7 +86,7 @@ sortedPairs groundSpaceR points =
 -- POINTS
 
 
-type alias Point =
+type alias PointVirt =
     -- Point in polar coordinates with virtual radius rVirt.  Virtual
     -- radius means that rVirt ∈ [0, 1] represents a radius such that
     -- the relative area (w.r.t. the ground space) of a disk with
@@ -103,42 +105,49 @@ type alias PointR =
 
 
 type alias PointH =
-    -- Point in hyperbolic polar coordinates.
+    -- Point in hyperbolic polar coordinates with some info
+    -- preprocessed.
     { r : Float
     , phi : Float
+    , sinhR : Float
+    , coshR : Float
+    -- , x : Float
+    -- , y : Float
     }
 
 
-randomPoint : Random.Generator Point
+randomPoint : Random.Generator PointVirt
 randomPoint =
-    Random.map2 Point (Random.float 0 1) (Random.float 0 (2 * pi))
+    Random.map2 PointVirt (Random.float 0 1) (Random.float 0 (2 * pi))
 
 
-randomPoints : Int -> Random.Generator (List Point)
+randomPoints : Int -> Random.Generator (List PointVirt)
 randomPoints n =
     Random.list n randomPoint
 
 
-toPointR : Float -> Float -> Point -> PointR
+toPointR : Float -> Float -> PointH -> PointR
 toPointR canvasSize groundSpaceR point =
     let
         offset : Float
         offset =
             canvasSize / 2
-
-        p : PointH
-        p =
-            toPointH groundSpaceR point
     in
-    { x = offset + offset * p.r / groundSpaceR * cos p.phi
-    , y = offset + offset * p.r / groundSpaceR * sin p.phi
+    { x = offset + offset * point.r / groundSpaceR * cos point.phi
+    , y = offset + offset * point.r / groundSpaceR * sin point.phi
     }
 
 
-toPointH : Float -> Point -> PointH
+toPointH : Float -> PointVirt -> PointH
 toPointH groundSpaceR point =
-    { r = acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
+    let
+        newR =
+            acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
+    in
+    { r = newR
     , phi = point.phi
+    , sinhR = sinh newR
+    , coshR = cosh newR
     }
 
 
@@ -170,7 +179,7 @@ dist p1 p2 =
         deltaPhi =
             min diff (2 * pi - diff)
     in
-    acosh (cosh p1.r * cosh p2.r - sinh p1.r * sinh p2.r * cos deltaPhi)
+    acosh (p1.coshR * p2.coshR - p1.sinhR * p2.sinhR * cos deltaPhi)
 
 
 
@@ -178,7 +187,7 @@ dist p1 p2 =
 
 
 type Msg
-    = NewPoints (List Point)
+    = NewPoints (List PointVirt)
     | CanvasSizeChange String
     | GroundSpaceRChange String
     | AvgDegChange String
@@ -189,10 +198,14 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewPoints newPoints ->
-            ( { model
-                | points = newPoints
-                , pointPairs = sortedPairs model.groundSpaceR newPoints
-              }
+            let
+                points =
+                    newPoints
+
+                pointsH =
+                    List.map (toPointH model.groundSpaceR) points
+            in
+            ( { model | points = points, pointPairs = sortedPairs pointsH, pointsH = pointsH }
             , Cmd.none
             )
 
@@ -207,11 +220,14 @@ update msg model =
             let
                 inputF =
                     withDefault model.groundSpaceR (String.toFloat input)
+
+                newR =
+                    20 ^ inputF - 0.9999
+
+                pointsH =
+                    List.map (toPointH newR) model.points
             in
-            ( { model
-                | groundSpaceR = 20 ^ inputF - 0.9999
-                , pointPairs = sortedPairs model.groundSpaceR model.points
-              }
+            ( { model | groundSpaceR = newR, pointPairs = sortedPairs pointsH, pointsH = pointsH }
             , Cmd.none
             )
 
@@ -234,15 +250,6 @@ update msg model =
             ( { model | n = n }
             , Random.generate NewPoints (randomPoints n)
             )
-
-
-
--- SUBSCRIPTIONS
-
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.none
 
 
 
@@ -297,7 +304,7 @@ view model =
                 (drawGroundSpace model.canvasSize
                     :: List.map
                         (drawPoint model.canvasSize model.groundSpaceR)
-                        model.points
+                        model.pointsH
                     ++ List.map
                         (drawLine model.canvasSize model.groundSpaceR)
                         (List.take nrEdges model.pointPairs)
@@ -310,6 +317,7 @@ view model =
 -- DRAWING SUBROUTINES
 
 
+canvas : Float -> List (Svg.Svg msg) -> Html msg
 canvas canvasSize =
     let
         size =
@@ -322,7 +330,7 @@ canvas canvasSize =
         ]
 
 
-drawPoint : Float -> Float -> Point -> Svg.Svg msg
+drawPoint : Float -> Float -> PointH -> Svg.Svg msg
 drawPoint canvasSize groundSpaceR point =
     let
         xy =
@@ -336,7 +344,7 @@ drawPoint canvasSize groundSpaceR point =
         []
 
 
-drawLine : Float -> Float -> ( Point, Point ) -> Svg.Svg msg
+drawLine : Float -> Float -> ( PointH, PointH ) -> Svg.Svg msg
 drawLine canvasSize groundSpaceR points =
     let
         p1 =
