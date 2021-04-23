@@ -32,7 +32,7 @@ main =
 
 type alias Model =
     { pointsVirt : List PointVirt
-    , canvasSize : Float
+    , canvasSize : Int
     , groundSpaceR : Float
     , avgDeg : Float
     , n : Int
@@ -93,9 +93,7 @@ type alias PointVirt =
     -- radius means that rVirt ∈ [0, 1] represents a radius such that
     -- the relative area (w.r.t. the ground space) of a disk with
     -- radius rVirt is rVirt.
-    { rVirt : Float
-    , phi : Float
-    }
+    { rVirt : Float, phi : Float }
 
 
 type alias Point =
@@ -121,14 +119,14 @@ randomPointsVirt n =
     Random.list n randomPointVirt
 
 
-toPoint : Float -> Float -> PointVirt -> Point
+toPoint : Int -> Float -> PointVirt -> Point
 toPoint canvasSize groundSpaceR point =
     let
         r =
             acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
 
         offset =
-            canvasSize / 2
+            (toFloat canvasSize) / 2
 
         x =
             offset + offset * r / groundSpaceR * cos point.phi
@@ -213,7 +211,7 @@ update msg model =
             { model | n = round n } |> updatePoints |> noCmd
 
         InputCanvasSize size ->
-            { model | canvasSize = size } |> updatePoints |> noCmd
+            { model | canvasSize = round size } |> updatePoints |> noCmd
 
         InputAvgDeg avgDeg ->
             { model | avgDeg = avgDeg } |> noCmd
@@ -225,19 +223,21 @@ update msg model =
 
 -- VIEW
 
-
+formatFloat : Float -> String
 formatFloat x =
     String.fromFloat (toFloat (round (10000 * x)) / 10000)
 
 
+sliderInt : String -> Int -> (Int -> Int) -> (Float -> Msg) -> Int -> Int -> Int -> Element Msg
 sliderInt label value valueFun msg min max step =
-    mySlider label (toFloat (valueFun value)) (String.fromInt value) msg (toFloat min) (toFloat max) (Just step)
+    mySlider label (toFloat (valueFun value)) (String.fromInt value) msg (toFloat min) (toFloat max) (Just (toFloat step))
 
-
+sliderFloat : String -> Float -> (Float -> Float) -> (Float -> Msg) -> Float -> Float -> Element Msg
 sliderFloat label value valueFun msg min max =
     mySlider label (valueFun value) (formatFloat value) msg min max Nothing
 
 
+mySlider : String -> Float -> String -> (Float -> Msg) -> Float -> Float -> Maybe Float -> Element Msg
 mySlider label value stringValue msg min max step =
     row [ spacing 10, width (px 500) ]
         [ el [ alignLeft ] (text label)
@@ -258,7 +258,6 @@ mySlider label value stringValue msg min max step =
             )
         ]
 
-
 viewNew : Model -> Html Msg
 viewNew model =
     let
@@ -268,7 +267,7 @@ viewNew model =
     layout []
         (row [ padding 10, spacing 20 ]
             [ column [ alignTop, spacing 10 ]
-                [ sliderInt "canvas size" (round model.canvasSize) identity InputCanvasSize 200 1200 1
+                [ sliderInt "canvas size"  model.canvasSize identity InputCanvasSize 200 1200 1
                 , sliderInt "number of vertices" model.n identity InputNrVertices 10 maxN 1
                 , sliderFloat "average degree" model.avgDeg identity InputAvgDeg 2 16
                 , sliderFloat "ground space radius" model.groundSpaceR (\x -> logBase 20 (x + 0.9999)) InputGroundSpaceR 0 1
@@ -290,11 +289,11 @@ viewNew model =
 -- DRAWING SUBROUTINES
 
 
-canvas : Float -> List (Svg.Svg msg) -> Html msg
+canvas : Int -> List (Svg.Svg msg) -> Html msg
 canvas canvasSize =
     let
         size =
-            String.fromFloat canvasSize
+            String.fromInt canvasSize
     in
     Svg.svg
         [ Svg.Attributes.width size
@@ -332,11 +331,11 @@ drawLine points =
         []
 
 
-drawGroundSpace : Float -> Svg.Svg msg
+drawGroundSpace : Int -> Svg.Svg msg
 drawGroundSpace canvasSize =
     let
         offset =
-            String.fromFloat (canvasSize / 2)
+            String.fromFloat (toFloat canvasSize / 2)
     in
     circle
         [ cx offset
