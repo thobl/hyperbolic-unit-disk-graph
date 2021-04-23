@@ -40,6 +40,7 @@ type alias Model =
     -- derived information
     , points : List Point
     , pointPairs : List ( Point, Point )
+    , thresholdRadius : Float
     }
 
 
@@ -57,6 +58,7 @@ init _ =
       , n = 100
       , points = []
       , pointPairs = []
+      , thresholdRadius = 1
       }
     , Random.generate GeneratedPoints (randomPointsVirt maxN)
     )
@@ -65,10 +67,6 @@ init _ =
 sortedPairs : List Point -> List ( Point, Point )
 sortedPairs points =
     let
-        pairDist : ( Point, Point ) -> Float
-        pairDist pair =
-            dist (Tuple.first pair) (Tuple.second pair)
-
         filter : ( Point, Point ) -> Bool
         filter pair =
             (Tuple.first pair).phi < (Tuple.second pair).phi
@@ -174,6 +172,11 @@ dist p1 p2 =
     acosh (p1.coshR * p2.coshR - p1.sinhR * p2.sinhR * cos deltaPhi)
 
 
+pairDist : ( Point, Point ) -> Float
+pairDist pair =
+    dist (Tuple.first pair) (Tuple.second pair)
+
+
 
 -- UPDATE
 
@@ -193,7 +196,27 @@ updatePoints model =
             List.map (toPoint model.canvasSize model.groundSpaceR)
                 (List.take model.n model.pointsVirt)
     in
-    { model | points = points, pointPairs = sortedPairs points }
+    { model | points = points, pointPairs = sortedPairs points } |> updateThresholdR
+
+
+updateThresholdR : Model -> Model
+updateThresholdR model =
+    let
+        nrEdges =
+            floor (toFloat model.n * model.avgDeg / 2)
+
+        lastPair =
+            List.drop (nrEdges - 1) model.pointPairs |> List.head
+
+        thresholdR =
+            case lastPair of
+                Just pair ->
+                    pairDist pair
+
+                Nothing ->
+                    0
+    in
+    { model | thresholdRadius = thresholdR }
 
 
 noCmd : Model -> ( Model, Cmd Msg )
@@ -214,7 +237,7 @@ update msg model =
             { model | canvasSize = round size } |> updatePoints |> noCmd
 
         InputAvgDeg avgDeg ->
-            { model | avgDeg = avgDeg } |> noCmd
+            { model | avgDeg = avgDeg } |> updateThresholdR |> noCmd
 
         InputGroundSpaceR x ->
             { model | groundSpaceR = inputToGroundSpaceR x } |> updatePoints |> noCmd
@@ -289,6 +312,7 @@ viewNew model =
                 (html
                     (canvas model.canvasSize
                         (drawGroundSpace model.canvasSize
+                            :: drawThresholdRadius model.canvasSize (model.thresholdRadius / model.groundSpaceR)
                             :: List.map drawPoint model.points
                             ++ List.map drawLine (List.take nrEdges model.pointPairs)
                         )
@@ -356,5 +380,24 @@ drawGroundSpace canvasSize =
         , r offset
         , Svg.Attributes.fill "none"
         , stroke "black"
+        ]
+        []
+
+
+drawThresholdRadius : Int -> Float -> Svg.Svg msg
+drawThresholdRadius canvasSize radiusRel =
+    let
+        offset =
+            String.fromFloat (toFloat canvasSize / 2)
+
+        radius =
+            String.fromFloat (toFloat canvasSize / 2 * radiusRel)
+    in
+    circle
+        [ cx offset
+        , cy offset
+        , r radius
+        , Svg.Attributes.fill "none"
+        , stroke "gray"
         ]
         []
