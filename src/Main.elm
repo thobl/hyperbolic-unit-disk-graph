@@ -29,15 +29,15 @@ main =
 
 
 type alias Model =
-    { points : List PointVirt
+    { pointsVirt : List PointVirt
     , canvasSize : Float
     , groundSpaceR : Float
     , avgDeg : Float
     , n : Int
 
     -- derived information
-    , pointsH : List PointH
-    , pointPairs : List ( PointH, PointH )
+    , points : List Point
+    , pointPairs : List ( Point, Point )
     }
 
 
@@ -48,30 +48,30 @@ initialN =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { points = []
+    ( { pointsVirt = []
       , canvasSize = 1000
       , groundSpaceR = 8
       , avgDeg = 4
       , n = initialN
-      , pointsH = []
+      , points = []
       , pointPairs = []
       }
     , Random.generate NewPoints (randomPoints initialN)
     )
 
 
-sortedPairs : List PointH -> List ( PointH, PointH )
+sortedPairs : List Point -> List ( Point, Point )
 sortedPairs points =
     let
-        pairDist : ( PointH, PointH ) -> Float
+        pairDist : ( Point, Point ) -> Float
         pairDist pair =
             dist (Tuple.first pair) (Tuple.second pair)
 
-        filter : ( PointH, PointH ) -> Bool
+        filter : ( Point, Point ) -> Bool
         filter pair =
             (Tuple.first pair).phi < (Tuple.second pair).phi
 
-        pairs : List ( PointH, PointH )
+        pairs : List ( Point, Point )
         pairs =
             List.filter filter
                 (List.concatMap
@@ -96,23 +96,16 @@ type alias PointVirt =
     }
 
 
-type alias PointR =
-    -- Point in Cartesian coordinates in R² (coordinate system of the
-    -- svg output)
-    { x : Float
-    , y : Float
-    }
-
-
-type alias PointH =
-    -- Point in hyperbolic polar coordinates with some info
-    -- preprocessed.
+type alias Point =
+    -- Point in hyperbolic polar coordinates as well as canvas
+    -- coordinates.  Additionally sinh(r) and cosh(r) are preprocessed
+    -- for faster distance computation.
     { r : Float
     , phi : Float
     , sinhR : Float
     , coshR : Float
-    -- , x : Float
-    -- , y : Float
+    , x : Float
+    , y : Float
     }
 
 
@@ -126,28 +119,27 @@ randomPoints n =
     Random.list n randomPoint
 
 
-toPointR : Float -> Float -> PointH -> PointR
-toPointR canvasSize groundSpaceR point =
+toPoint : Float -> Float -> PointVirt -> Point
+toPoint canvasSize groundSpaceR point =
     let
-        offset : Float
+        r =
+            acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
+
         offset =
             canvasSize / 2
-    in
-    { x = offset + offset * point.r / groundSpaceR * cos point.phi
-    , y = offset + offset * point.r / groundSpaceR * sin point.phi
-    }
 
+        x =
+            offset + offset * r / groundSpaceR * cos point.phi
 
-toPointH : Float -> PointVirt -> PointH
-toPointH groundSpaceR point =
-    let
-        newR =
-            acosh (point.rVirt * (cosh groundSpaceR - 1) + 1)
+        y =
+            offset + offset * r / groundSpaceR * sin point.phi
     in
-    { r = newR
+    { r = r
     , phi = point.phi
-    , sinhR = sinh newR
-    , coshR = cosh newR
+    , sinhR = sinh r
+    , coshR = cosh r
+    , x = x
+    , y = y
     }
 
 
@@ -170,7 +162,7 @@ acosh x =
     logBase e (x + sqrt (x - 1) * sqrt (x + 1))
 
 
-dist : PointH -> PointH -> Float
+dist : Point -> Point -> Float
 dist p1 p2 =
     let
         diff =
@@ -199,13 +191,13 @@ update msg model =
     case msg of
         NewPoints newPoints ->
             let
-                points =
+                pointsVirt =
                     newPoints
 
-                pointsH =
-                    List.map (toPointH model.groundSpaceR) points
+                points =
+                    List.map (toPoint model.canvasSize model.groundSpaceR) pointsVirt
             in
-            ( { model | points = points, pointPairs = sortedPairs pointsH, pointsH = pointsH }
+            ( { model | pointsVirt = pointsVirt, pointPairs = sortedPairs points, points = points }
             , Cmd.none
             )
 
@@ -224,10 +216,10 @@ update msg model =
                 newR =
                     20 ^ inputF - 0.9999
 
-                pointsH =
-                    List.map (toPointH newR) model.points
+                points =
+                    List.map (toPoint model.canvasSize newR) model.pointsVirt
             in
-            ( { model | groundSpaceR = newR, pointPairs = sortedPairs pointsH, pointsH = pointsH }
+            ( { model | groundSpaceR = newR, pointPairs = sortedPairs points, points = points }
             , Cmd.none
             )
 
@@ -273,7 +265,7 @@ view : Model -> Html Msg
 view model =
     let
         n =
-            toFloat (List.length model.points)
+            toFloat (List.length model.pointsVirt)
 
         nrEdges =
             floor (n * model.avgDeg / 2)
@@ -302,12 +294,8 @@ view model =
         , div []
             [ canvas model.canvasSize
                 (drawGroundSpace model.canvasSize
-                    :: List.map
-                        (drawPoint model.canvasSize model.groundSpaceR)
-                        model.pointsH
-                    ++ List.map
-                        (drawLine model.canvasSize model.groundSpaceR)
-                        (List.take nrEdges model.pointPairs)
+                    :: List.map drawPoint model.points
+                    ++ List.map drawLine (List.take nrEdges model.pointPairs)
                 )
             ]
         ]
@@ -330,40 +318,30 @@ canvas canvasSize =
         ]
 
 
-drawPoint : Float -> Float -> PointH -> Svg.Svg msg
-drawPoint canvasSize groundSpaceR point =
-    let
-        xy =
-            toPointR canvasSize groundSpaceR point
-    in
+drawPoint : Point -> Svg.Svg msg
+drawPoint point =
     Svg.circle
-        [ cx (String.fromFloat xy.x)
-        , cy (String.fromFloat xy.y)
+        [ cx (String.fromFloat point.x)
+        , cy (String.fromFloat point.y)
         , r "3"
         ]
         []
 
 
-drawLine : Float -> Float -> ( PointH, PointH ) -> Svg.Svg msg
-drawLine canvasSize groundSpaceR points =
+drawLine : ( Point, Point ) -> Svg.Svg msg
+drawLine points =
     let
         p1 =
             Tuple.first points
 
         p2 =
             Tuple.second points
-
-        xy1 =
-            toPointR canvasSize groundSpaceR p1
-
-        xy2 =
-            toPointR canvasSize groundSpaceR p2
     in
     Svg.line
-        [ x1 (String.fromFloat xy1.x)
-        , y1 (String.fromFloat xy1.y)
-        , x2 (String.fromFloat xy2.x)
-        , y2 (String.fromFloat xy2.y)
+        [ x1 (String.fromFloat p1.x)
+        , y1 (String.fromFloat p1.y)
+        , x2 (String.fromFloat p2.x)
+        , y2 (String.fromFloat p2.y)
         , stroke "black"
         ]
         []
