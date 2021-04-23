@@ -41,9 +41,9 @@ type alias Model =
     }
 
 
-initialN : Int
-initialN =
-    100
+maxN : Int
+maxN =
+    200
 
 
 init : () -> ( Model, Cmd Msg )
@@ -52,11 +52,11 @@ init _ =
       , canvasSize = 1000
       , groundSpaceR = 8
       , avgDeg = 4
-      , n = initialN
+      , n = 100
       , points = []
       , pointPairs = []
       }
-    , Random.generate NewPoints (randomPointsVirt initialN)
+    , Random.generate NewPoints (randomPointsVirt maxN)
     )
 
 
@@ -195,7 +195,7 @@ update msg model =
                     newPoints
 
                 points =
-                    List.map (toPoint model.canvasSize model.groundSpaceR) pointsVirt
+                    List.map (toPoint model.canvasSize model.groundSpaceR) (List.take model.n pointsVirt)
             in
             ( { model | pointsVirt = pointsVirt, pointPairs = sortedPairs points, points = points }
             , Cmd.none
@@ -217,7 +217,7 @@ update msg model =
                     20 ^ inputF - 0.9999
 
                 points =
-                    List.map (toPoint model.canvasSize newR) model.pointsVirt
+                    List.map (toPoint model.canvasSize newR) (List.take model.n model.pointsVirt)
             in
             ( { model | groundSpaceR = newR, pointPairs = sortedPairs points, points = points }
             , Cmd.none
@@ -238,9 +238,12 @@ update msg model =
             let
                 n =
                     withDefault model.n (String.toInt input)
+                        
+                points =
+                    List.map (toPoint model.canvasSize model.groundSpaceR) (List.take n model.pointsVirt)
             in
-            ( { model | n = n }
-            , Random.generate NewPoints (randomPointsVirt n)
+            ( { model | n = n, pointPairs = sortedPairs points, points = points }
+            , Cmd.none-- Random.generate NewPoints (randomPointsVirt n)
             )
 
 
@@ -264,11 +267,8 @@ slider min max step val msg =
 view : Model -> Html Msg
 view model =
     let
-        n =
-            toFloat (List.length model.pointsVirt)
-
         nrEdges =
-            floor (n * model.avgDeg / 2)
+            floor (toFloat model.n * model.avgDeg / 2)
     in
     div []
         [ div []
