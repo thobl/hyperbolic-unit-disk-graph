@@ -1,13 +1,15 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, div, input, text)
-import Html.Attributes exposing (type_, value)
-import Html.Events exposing (onInput)
+import Element exposing (..)
+import Element.Background as Background
+import Element.Border
+import Element.Input exposing (defaultThumb, labelLeft, labelRight, slider)
+import Html exposing (Html)
 import Maybe exposing (withDefault)
 import Random
-import Svg exposing (circle, svg)
-import Svg.Attributes exposing (cx, cy, fill, height, r, stroke, viewBox, width, x1, x2, y1, y2)
+import Svg exposing (circle, line)
+import Svg.Attributes exposing (cx, cy, r, stroke, x1, x2, y1, y2)
 
 
 
@@ -19,7 +21,7 @@ main =
     Browser.element
         { init = init
         , update = update
-        , view = view
+        , view = viewNew
         , subscriptions = always Sub.none
         }
 
@@ -56,7 +58,7 @@ init _ =
       , points = []
       , pointPairs = []
       }
-    , Random.generate NewPoints (randomPointsVirt maxN)
+    , Random.generate GeneratedPoints (randomPointsVirt maxN)
     )
 
 
@@ -179,11 +181,11 @@ dist p1 p2 =
 
 
 type Msg
-    = NewPoints (List PointVirt)
-    | CanvasSizeChange String
-    | GroundSpaceRChange String
-    | AvgDegChange String
-    | NChange String
+    = GeneratedPoints (List PointVirt)
+    | InputNrVertices Float
+    | InputCanvasSize Float
+    | InputAvgDeg Float
+    | InputGroundSpaceR Float
 
 
 updatePoints : Model -> Model
@@ -204,90 +206,91 @@ noCmd model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NewPoints newPoints ->
+        GeneratedPoints newPoints ->
             { model | pointsVirt = newPoints } |> updatePoints |> noCmd
 
-        CanvasSizeChange newValue ->
-            let
-                inputF =
-                    withDefault model.canvasSize (String.toFloat newValue)
-            in
-            { model | canvasSize = inputF } |> updatePoints |> noCmd
+        InputNrVertices n ->
+            { model | n = round n } |> updatePoints |> noCmd
 
-        GroundSpaceRChange input ->
-            let
-                inputF =
-                    withDefault model.groundSpaceR (String.toFloat input)
-            in
-            { model | groundSpaceR = 20 ^ inputF - 0.9999 } |> updatePoints |> noCmd
+        InputCanvasSize size ->
+            { model | canvasSize = size } |> updatePoints |> noCmd
 
-        AvgDegChange input ->
-            let
-                avgDeg =
-                    withDefault model.avgDeg (String.toFloat input)
-            in
+        InputAvgDeg avgDeg ->
             { model | avgDeg = avgDeg } |> noCmd
 
-        NChange input ->
-            let
-                n =
-                    withDefault model.n (String.toInt input)
-            in
-            { model | n = n } |> updatePoints |> noCmd
+        InputGroundSpaceR x ->
+            { model | groundSpaceR = 20 ^ x - 0.9999 } |> updatePoints |> noCmd
 
 
 
 -- VIEW
 
 
-slider : Float -> Float -> Float -> Float -> (String -> Msg) -> Html Msg
-slider min max step val msg =
-    input
-        [ type_ "range"
-        , Html.Attributes.min (String.fromFloat min)
-        , Html.Attributes.max (String.fromFloat max)
-        , Html.Attributes.step (String.fromFloat step)
-        , value (String.fromFloat val)
-        , onInput msg
+formatFloat x =
+    String.fromFloat (toFloat (round (10000 * x)) / 10000)
+
+
+sliderInt label value printValue msg min max step =
+    mySlider label (toFloat value) (String.fromInt printValue) msg (toFloat min) (toFloat max) (Just step)
+
+
+sliderFloat label value printValue msg min max =
+    mySlider label value (formatFloat printValue) msg min max Nothing
+
+
+mySlider label value stringValue msg min max step =
+    row [ spacing 10, width (px 500) ]
+        [ el [ alignLeft ] (text label)
+        , el [ alignRight ]
+            (slider
+                [ width (px 200)
+                , behindContent
+                    (el
+                        [ width fill
+                        , height (px 2)
+                        , centerY
+                        , Background.color (rgb 0.5 0.5 0.5)
+                        ]
+                        none
+                    )
+                ]
+                { onChange = msg
+                , label = labelLeft [ centerY ] (text stringValue)
+                , min = min
+                , max = max
+                , step = step
+                , value = value
+                , thumb = defaultThumb
+                }
+            )
         ]
-        []
 
 
-view : Model -> Html Msg
-view model =
+viewNew : Model -> Html Msg
+viewNew model =
     let
         nrEdges =
             floor (toFloat model.n * model.avgDeg / 2)
     in
-    div []
-        [ div []
-            [ slider 200 1200 1 model.canvasSize CanvasSizeChange
-            , text "Canvas Size"
-            ]
-        , div []
-            [ slider 10 (toFloat maxN) 10 (toFloat model.n) NChange
-            , text ("n (" ++ String.fromInt model.n ++ ")")
-            ]
-        , div []
-            [ slider 2 16 0.2 model.avgDeg AvgDegChange
-            , text ("Avg Deg (" ++ String.fromFloat model.avgDeg ++ ")")
-            ]
-        , div []
-            [ slider 0 1 0.01 (logBase 20 (model.groundSpaceR + 0.9999)) GroundSpaceRChange
-            , text
-                ("Ground Space Radius ("
-                    ++ String.fromFloat model.groundSpaceR
-                    ++ ")"
+    layout []
+        (row [ padding 10, spacing 20 ]
+            [ column [ alignTop, spacing 10 ]
+                [ sliderInt "canvas size" (round model.canvasSize) (round model.canvasSize) InputCanvasSize 200 1200 1
+                , sliderInt "number of vertices" model.n model.n InputNrVertices 10 maxN 1
+                , sliderFloat "average degree" model.avgDeg model.avgDeg InputAvgDeg 2 16
+                , sliderFloat "ground space radius" (logBase 20 (model.groundSpaceR + 0.9999)) model.groundSpaceR InputGroundSpaceR 0 1
+                ]
+            , el []
+                (html
+                    (canvas model.canvasSize
+                        (drawGroundSpace model.canvasSize
+                            :: List.map drawPoint model.points
+                            ++ List.map drawLine (List.take nrEdges model.pointPairs)
+                        )
+                    )
                 )
             ]
-        , div []
-            [ canvas model.canvasSize
-                (drawGroundSpace model.canvasSize
-                    :: List.map drawPoint model.points
-                    ++ List.map drawLine (List.take nrEdges model.pointPairs)
-                )
-            ]
-        ]
+        )
 
 
 
@@ -300,16 +303,16 @@ canvas canvasSize =
         size =
             String.fromFloat canvasSize
     in
-    svg
-        [ width size
-        , height size
-        , viewBox ("0 0 " ++ size ++ " " ++ size)
+    Svg.svg
+        [ Svg.Attributes.width size
+        , Svg.Attributes.height size
+        , Svg.Attributes.viewBox ("0 0 " ++ size ++ " " ++ size)
         ]
 
 
 drawPoint : Point -> Svg.Svg msg
 drawPoint point =
-    Svg.circle
+    circle
         [ cx (String.fromFloat point.x)
         , cy (String.fromFloat point.y)
         , r "3"
@@ -326,7 +329,7 @@ drawLine points =
         p2 =
             Tuple.second points
     in
-    Svg.line
+    line
         [ x1 (String.fromFloat p1.x)
         , y1 (String.fromFloat p1.y)
         , x2 (String.fromFloat p2.x)
@@ -346,7 +349,7 @@ drawGroundSpace canvasSize =
         [ cx offset
         , cy offset
         , r offset
-        , fill "none"
+        , Svg.Attributes.fill "none"
         , stroke "black"
         ]
         []
