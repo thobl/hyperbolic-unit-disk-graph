@@ -43,7 +43,7 @@ type alias Model =
 
 maxN : Int
 maxN =
-    200
+    250
 
 
 init : () -> ( Model, Cmd Msg )
@@ -186,65 +186,54 @@ type Msg
     | NChange String
 
 
+updatePoints : Model -> Model
+updatePoints model =
+    let
+        points =
+            List.map (toPoint model.canvasSize model.groundSpaceR)
+                (List.take model.n model.pointsVirt)
+    in
+    { model | points = points, pointPairs = sortedPairs points }
+
+
+noCmd : Model -> ( Model, Cmd Msg )
+noCmd model =
+    ( model, Cmd.none )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NewPoints newPoints ->
-            let
-                pointsVirt =
-                    newPoints
-
-                points =
-                    List.map (toPoint model.canvasSize model.groundSpaceR) (List.take model.n pointsVirt)
-            in
-            ( { model | pointsVirt = pointsVirt, pointPairs = sortedPairs points, points = points }
-            , Cmd.none
-            )
+            { model | pointsVirt = newPoints } |> updatePoints |> noCmd
 
         CanvasSizeChange newValue ->
-            ( { model
-                | canvasSize = withDefault model.canvasSize (String.toFloat newValue)
-              }
-            , Cmd.none
-            )
+            let
+                inputF =
+                    withDefault model.canvasSize (String.toFloat newValue)
+            in
+            { model | canvasSize = inputF } |> updatePoints |> noCmd
 
         GroundSpaceRChange input ->
             let
                 inputF =
                     withDefault model.groundSpaceR (String.toFloat input)
-
-                newR =
-                    20 ^ inputF - 0.9999
-
-                points =
-                    List.map (toPoint model.canvasSize newR) (List.take model.n model.pointsVirt)
             in
-            ( { model | groundSpaceR = newR, pointPairs = sortedPairs points, points = points }
-            , Cmd.none
-            )
+            { model | groundSpaceR = 20 ^ inputF - 0.9999 } |> updatePoints |> noCmd
 
         AvgDegChange input ->
             let
                 avgDeg =
                     withDefault model.avgDeg (String.toFloat input)
             in
-            ( { model
-                | avgDeg = avgDeg
-              }
-            , Cmd.none
-            )
+            { model | avgDeg = avgDeg } |> noCmd
 
         NChange input ->
             let
                 n =
                     withDefault model.n (String.toInt input)
-                        
-                points =
-                    List.map (toPoint model.canvasSize model.groundSpaceR) (List.take n model.pointsVirt)
             in
-            ( { model | n = n, pointPairs = sortedPairs points, points = points }
-            , Cmd.none-- Random.generate NewPoints (randomPointsVirt n)
-            )
+            { model | n = n } |> updatePoints |> noCmd
 
 
 
@@ -276,7 +265,7 @@ view model =
             , text "Canvas Size"
             ]
         , div []
-            [ slider 10 200 10 (toFloat model.n) NChange
+            [ slider 10 (toFloat maxN) 10 (toFloat model.n) NChange
             , text ("n (" ++ String.fromInt model.n ++ ")")
             ]
         , div []
