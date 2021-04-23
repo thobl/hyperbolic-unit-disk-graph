@@ -46,7 +46,7 @@ type alias Model =
 
 maxN : Int
 maxN =
-    250
+    400
 
 
 init : () -> ( Model, Cmd Msg )
@@ -55,7 +55,7 @@ init _ =
       , canvasSize = 1000
       , groundSpaceR = 8
       , avgDeg = 4
-      , n = 100
+      , n = 150
       , points = []
       , pointPairs = []
       , thresholdRadius = 1
