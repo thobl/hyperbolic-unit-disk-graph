@@ -230,12 +230,12 @@ formatFloat x =
     String.fromFloat (toFloat (round (10000 * x)) / 10000)
 
 
-sliderInt label value printValue msg min max step =
-    mySlider label (toFloat value) (String.fromInt printValue) msg (toFloat min) (toFloat max) (Just step)
+sliderInt label value valueFun msg min max step =
+    mySlider label (toFloat (valueFun value)) (String.fromInt value) msg (toFloat min) (toFloat max) (Just step)
 
 
-sliderFloat label value printValue msg min max =
-    mySlider label value (formatFloat printValue) msg min max Nothing
+sliderFloat label value valueFun msg min max =
+    mySlider label (valueFun value) (formatFloat value) msg min max Nothing
 
 
 mySlider label value stringValue msg min max step =
@@ -245,14 +245,7 @@ mySlider label value stringValue msg min max step =
             (slider
                 [ width (px 200)
                 , behindContent
-                    (el
-                        [ width fill
-                        , height (px 2)
-                        , centerY
-                        , Background.color (rgb 0.5 0.5 0.5)
-                        ]
-                        none
-                    )
+                    (el [ width fill, height (px 2), centerY, Background.color (rgb 0.5 0.5 0.5) ] none)
                 ]
                 { onChange = msg
                 , label = labelLeft [ centerY ] (text stringValue)
@@ -275,10 +268,10 @@ viewNew model =
     layout []
         (row [ padding 10, spacing 20 ]
             [ column [ alignTop, spacing 10 ]
-                [ sliderInt "canvas size" (round model.canvasSize) (round model.canvasSize) InputCanvasSize 200 1200 1
-                , sliderInt "number of vertices" model.n model.n InputNrVertices 10 maxN 1
-                , sliderFloat "average degree" model.avgDeg model.avgDeg InputAvgDeg 2 16
-                , sliderFloat "ground space radius" (logBase 20 (model.groundSpaceR + 0.9999)) model.groundSpaceR InputGroundSpaceR 0 1
+                [ sliderInt "canvas size" (round model.canvasSize) identity InputCanvasSize 200 1200 1
+                , sliderInt "number of vertices" model.n identity InputNrVertices 10 maxN 1
+                , sliderFloat "average degree" model.avgDeg identity InputAvgDeg 2 16
+                , sliderFloat "ground space radius" model.groundSpaceR (\x -> logBase 20 (x + 0.9999)) InputGroundSpaceR 0 1
                 ]
             , el []
                 (html
