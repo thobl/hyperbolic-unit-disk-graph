@@ -3,6 +3,7 @@ module Main exposing (..)
 import Browser
 import Element exposing (..)
 import Element.Background as Background
+import Element.Font as Font
 import Element.Input exposing (defaultThumb, labelLeft, slider)
 import Html exposing (Html)
 import Random
@@ -51,8 +52,8 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { pointsVirt = []
       , canvasSize = 1000
-      , groundSpaceR = 8
-      , avgDeg = 4
+      , groundSpaceR = 8.5
+      , avgDeg = 6
       , n = 200
       , points = []
       , pointPairs = []
@@ -259,7 +260,6 @@ formatFloat x =
     String.fromFloat (toFloat (round (1000 * x)) / 1000)
 
 
-
 type alias SliderSettings =
     { label : String
     , onChange : Float -> Msg
@@ -272,12 +272,12 @@ type alias SliderSettings =
 
 mySlider : SliderSettings -> Element Msg
 mySlider s =
-    row [ spacing 10, width (px 500) ]
+    row [ spacing 10, width (px 600) ]
         [ el [ alignLeft ] (text s.label)
         , el [ alignRight ]
             (slider
                 -- slider optics
-                [ width (px 200)
+                [ width (px 300)
                 , behindContent
                     (el
                         [ width fill
@@ -342,13 +342,13 @@ viewNew model =
                     , min = 0
                     , max = 1
                     }
-                , text (String.fromFloat (model.thresholdRadius / model.groundSpaceR))
+                , description model
                 ]
             , el []
                 (html
                     (canvas model.canvasSize
-                        (drawGroundSpace model.canvasSize
-                            :: drawThresholdRadius model.canvasSize (model.thresholdRadius / model.groundSpaceR)
+                        (drawGroundSpace model
+                            :: drawThresholdRadius model
                             :: List.map drawPoint model.points
                             ++ List.map drawLine (List.take nrEdges model.pointPairs)
                         )
@@ -356,6 +356,176 @@ viewNew model =
                 )
             ]
         )
+
+
+title : String -> Element Msg
+title t =
+    el [ paddingXY 0 10, Font.size 22, Font.bold ] (text t)
+
+
+wildcardText : Model -> String -> Element Msg
+wildcardText model s =
+    text
+        (String.concat
+            (List.map
+                (\part ->
+                    case part of
+                        "n" ->
+                            String.fromInt model.n
+
+                        "avgDeg" ->
+                            formatFloat model.avgDeg
+
+                        "groundSpaceR" ->
+                            formatFloat model.groundSpaceR
+
+                        "thresholdRadius" ->
+                            formatFloat model.thresholdRadius
+
+                        "thresholdRadiusRel" ->
+                            formatFloat (model.thresholdRadius / model.groundSpaceR)
+
+                        "m" ->
+                            String.fromInt (floor (toFloat model.n * model.avgDeg / 2))
+
+                        _ ->
+                            part
+                )
+                (String.split "$" s)
+            )
+        )
+
+
+description : Model -> Element Msg
+description model =
+    let 
+        hyperbolic = model.thresholdRadius / model.groundSpaceR > 0.6
+        euclidean = model.thresholdRadius / model.groundSpaceR < 0.25
+    in
+    textColumn [ paddingXY 0 15, spacing 10 ]
+        [ title "What do I see?"
+        , paragraph []
+            [ wildcardText model """
+
+You see a disk of radius $groundSpaceR$ in the hyperbolic plane
+represented by a black circle.  This is the ground space.  Within the
+ground space, you see a graph with $n$ vertices and $m$ edges, where
+two vertices are connected by an edge if their hyperbolic distance
+does not exceed the threshold of $thresholdRadius$
+($thresholdRadiusRel$ times the radius of the ground space).
+
+"""
+            ]
+        , title "How did you choose the vertex positions?"
+        , paragraph []
+            [ text """
+
+I sampled the uniformly at random form the ground space, i.e., the
+probability for a vertex to land in a given region is proportional to
+the area of that region.
+
+"""
+            ]
+        , paragraph []
+            [ text
+                (if hyperbolic then
+                    """
+
+The points don't seem uniformly distributed?  Well they are, although
+it seems that the points get denser towards the perimeter.  This comes
+from the distorted representation of the hyperbolic plane.  As the
+area of a disk grows exponentially with its radius, most of the area
+of the ground space is close to its perimeter.  Thus, we get more
+vertices there.
+
+"""
+
+                 else if euclidean then
+                    """
+
+This doesn't look very hyperbolic to you?  Well, you chose a rather
+small radius for the ground space.  Locally the hyperbolic plane looks
+like the Euclidean plane.  Thus, if you look at only a tiny disk in
+the hyperbolic plane, you shouldn't expect to see much of the
+hyperbolic stuff.
+
+"""
+
+                 else
+                    """
+
+The points seem somewhat off?  Like, not really uniformly distributed?
+And what about hyperbolic geometry?  Wondering what is hyperbolic
+about this?  You are somewhere between two extremes right now.  Try to
+increase or decrease the ground space radius to get a clearer picture.
+
+"""
+                )
+            ]
+        , title "Why does the threshold distance change like that?"
+        , paragraph []
+            [ wildcardText model """
+
+I choose the threshold distance (radius of the gray disk) such that
+the graph has average degree $avgDeg$.  If you increase the average
+degree, I will increase the threshold radius.
+
+"""
+            ]
+        , paragraph []
+            [ wildcardText model """
+
+If you increase the number of vertices, there will be less space
+available for each vertex.  To keep the average degree at $avgDeg$, I
+will decrease the threshold radius.
+
+"""
+            ]
+        , paragraph []
+            [ wildcardText model """
+
+If you increase the ground space radius, the available space will grow
+exponentially.  To keep the average degree at $avgDeg$, I will heavily
+increase the threshold distance.
+
+"""
+            ]
+        , title "How does this impact the graph structure?"
+        , paragraph []
+            [ wildcardText model
+                (if hyperbolic then
+                    """
+
+The threshold distance is rather large ($thresholdRadiusRel$ of the
+ground space radius), which leads to hierarchical structures.
+Vertices are higher up in this hierarchy the closer they are to the
+center.  Decrease the ground space radius and observe how the
+structure changes.
+
+"""
+
+                 else if euclidean then
+                    """
+
+The threshold distance is small ($thresholdRadiusRel$ of the ground
+space radius), which leads to grid-like structures as in Euclidean
+unit disk graphs.  This is not surprising, as the ground space is only
+a tiny portion of the hyperbolic plane.  Increase the ground space
+radius and observe how the structure changes.
+
+"""
+
+                 else
+                    """
+
+You are somewhere between two extremes right now, which is why you get
+some grid-like and some hierarchical structures.  Try to increase or
+decrease the ground space radius to get a clearer picture.
+
+"""
+                )
+            ]
+        ]
 
 
 
@@ -404,36 +574,34 @@ drawLine points =
         []
 
 
-drawGroundSpace : Int -> Svg.Svg msg
-drawGroundSpace canvasSize =
-    let
-        offset =
-            String.fromFloat (toFloat canvasSize / 2)
-    in
+drawCircle : Float -> Float -> Float -> String -> Svg.Svg msg
+drawCircle centerX centerY radius color =
     circle
-        [ cx offset
-        , cy offset
-        , r offset
+        [ cx (String.fromFloat centerX)
+        , cy (String.fromFloat centerY)
+        , r (String.fromFloat radius)
         , Svg.Attributes.fill "none"
-        , stroke "black"
+        , stroke color
         ]
         []
 
 
-drawThresholdRadius : Int -> Float -> Svg.Svg msg
-drawThresholdRadius canvasSize radiusRel =
+drawGroundSpace : Model -> Svg.Svg msg
+drawGroundSpace model =
     let
         offset =
-            String.fromFloat (toFloat canvasSize / 2)
+            toFloat model.canvasSize / 2
+    in
+    drawCircle offset offset offset "black"
+
+
+drawThresholdRadius : Model -> Svg.Svg msg
+drawThresholdRadius model =
+    let
+        offset =
+            toFloat model.canvasSize / 2
 
         radius =
-            String.fromFloat (toFloat canvasSize / 2 * radiusRel)
+            offset * model.thresholdRadius / model.groundSpaceR
     in
-    circle
-        [ cx offset
-        , cy offset
-        , r radius
-        , Svg.Attributes.fill "none"
-        , stroke "gray"
-        ]
-        []
+    drawCircle offset offset radius "gray"
