@@ -277,7 +277,7 @@ mySlider s =
         , el [ alignRight ]
             (slider
                 -- slider optics
-                [ width (px 300)
+                [ width (px 350)
                 , behindContent
                     (el
                         [ width fill
@@ -307,10 +307,12 @@ viewNew model =
         nrEdges =
             floor (toFloat model.n * model.avgDeg / 2)
     in
-    layout []
+    layout
+        [ Font.size 18 ]
         (row [ padding 10, spacing 40 ]
             [ column [ alignTop, spacing 10 ]
-                [ mySlider
+                [ title1 "Hyperbolic Unit Disk Graph"
+                , mySlider
                     { label = "canvas size"
                     , onChange = InputCanvasSize
                     , value = toFloat model.canvasSize
@@ -344,7 +346,7 @@ viewNew model =
                     }
                 , description model
                 ]
-            , el []
+            , el [ alignTop, paddingXY 0 20 ]
                 (html
                     (canvas model.canvasSize
                         (drawGroundSpace model
@@ -358,8 +360,13 @@ viewNew model =
         )
 
 
-title : String -> Element Msg
-title t =
+title1 : String -> Element Msg
+title1 t =
+    el [ paddingXY 0 10, Font.size 26, Font.bold ] (text t)
+
+
+title2 : String -> Element Msg
+title2 t =
     el [ paddingXY 0 10, Font.size 22, Font.bold ] (text t)
 
 
@@ -398,17 +405,20 @@ wildcardText model s =
 
 description : Model -> Element Msg
 description model =
-    let 
-        hyperbolic = model.thresholdRadius / model.groundSpaceR > 0.6
-        euclidean = model.thresholdRadius / model.groundSpaceR < 0.25
+    let
+        hyperbolic =
+            model.thresholdRadius / model.groundSpaceR > 0.6
+
+        euclidean =
+            model.thresholdRadius / model.groundSpaceR < 0.25
     in
     textColumn [ paddingXY 0 15, spacing 10 ]
-        [ title "What do I see?"
+        [ title2 "What do I see?"
         , paragraph []
             [ wildcardText model """
 
 You see a disk of radius $groundSpaceR$ in the hyperbolic plane
-represented by a black circle.  This is the ground space.  Within the
+represented by the black circle.  This is the ground space.  Within the
 ground space, you see a graph with $n$ vertices and $m$ edges, where
 two vertices are connected by an edge if their hyperbolic distance
 does not exceed the threshold of $thresholdRadius$
@@ -416,11 +426,11 @@ does not exceed the threshold of $thresholdRadius$
 
 """
             ]
-        , title "How did you choose the vertex positions?"
+        , title2 "How did you choose the vertex positions?"
         , paragraph []
             [ text """
 
-I sampled the uniformly at random form the ground space, i.e., the
+I sampled them uniformly at random form the ground space, i.e., the
 probability for a vertex to land in a given region is proportional to
 the area of that region.
 
@@ -431,11 +441,11 @@ the area of that region.
                 (if hyperbolic then
                     """
 
-The points don't seem uniformly distributed?  Well they are, although
-it seems that the points get denser towards the perimeter.  This comes
-from the distorted representation of the hyperbolic plane.  As the
-area of a disk grows exponentially with its radius, most of the area
-of the ground space is close to its perimeter.  Thus, we get more
+You don't think the points uniformly distributed?  Well they are,
+although it seems that the points get denser towards the perimeter.
+This comes from the distorted representation of the hyperbolic plane.
+As the area of a disk grows exponentially with its radius, most of the
+area of the ground space is close to its perimeter.  Thus, we get more
 vertices there.
 
 """
@@ -462,13 +472,13 @@ increase or decrease the ground space radius to get a clearer picture.
 """
                 )
             ]
-        , title "Why does the threshold distance change like that?"
+        , title2 "How do you choose the threshold distance?"
         , paragraph []
             [ wildcardText model """
 
 I choose the threshold distance (radius of the gray disk) such that
 the graph has average degree $avgDeg$.  If you increase the average
-degree, I will increase the threshold radius.
+degree, I will increase the threshold distance.
 
 """
             ]
@@ -490,7 +500,7 @@ increase the threshold distance.
 
 """
             ]
-        , title "How does this impact the graph structure?"
+        , title2 "How does this impact the graph structure?"
         , paragraph []
             [ wildcardText model
                 (if hyperbolic then
@@ -509,8 +519,8 @@ structure changes.
 
 The threshold distance is small ($thresholdRadiusRel$ of the ground
 space radius), which leads to grid-like structures as in Euclidean
-unit disk graphs.  This is not surprising, as the ground space is only
-a tiny portion of the hyperbolic plane.  Increase the ground space
+unit disk graphs.  This is not surprising, as the ground space is
+small and thus looks rather Euclidean.  Increase the ground space
 radius and observe how the structure changes.
 
 """
@@ -519,7 +529,7 @@ radius and observe how the structure changes.
                     """
 
 You are somewhere between two extremes right now, which is why you get
-some grid-like and some hierarchical structures.  Try to increase or
+some hierarchical and some grid-like structures.  Try to increase or
 decrease the ground space radius to get a clearer picture.
 
 """
