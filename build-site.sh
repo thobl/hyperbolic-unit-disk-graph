@@ -2,8 +2,8 @@
 
 set -e
 
-js="site/elm.js"
-min="site/elm.min.js"
+js="elm.js"
+min="elm.min.js"
 src="src/Main.elm"
 
 elm make --optimize --output=$js $src
