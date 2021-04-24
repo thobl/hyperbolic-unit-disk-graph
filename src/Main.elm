@@ -430,7 +430,7 @@ does not exceed the threshold of $thresholdRadius$
         , paragraph []
             [ text """
 
-I sampled them uniformly at random form the ground space, i.e., the
+I sampled them uniformly at random from the ground space, i.e., the
 probability for a vertex to land in a given region is proportional to
 the area of that region.
 
@@ -441,7 +441,7 @@ the area of that region.
                 (if hyperbolic then
                     """
 
-You don't think the points uniformly distributed?  Well they are,
+You don't think the points are distributed uniformly?  Well they are,
 although it seems that the points get denser towards the perimeter.
 This comes from the distorted representation of the hyperbolic plane.
 As the area of a disk grows exponentially with its radius, most of the
