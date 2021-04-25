@@ -204,7 +204,7 @@ updateThresholdR model =
                     pairDist pair
 
                 Nothing ->
-                    0
+                    2 * model.groundSpaceR
     in
     { model | thresholdRadius = thresholdR }
 
@@ -229,13 +229,13 @@ update msg model =
             { model | pointsVirt = newPoints } |> updatePoints |> noCmd
 
         InputNrVertices n ->
-            { model | n = round n } |> updatePoints |> noCmd
+            { model | n = max (round n) (ceiling model.avgDeg + 1) } |> updatePoints |> noCmd
 
         InputCanvasSize size ->
             { model | canvasSize = round size } |> updatePoints |> noCmd
 
         InputAvgDeg avgDeg ->
-            { model | avgDeg = avgDeg } |> updateThresholdR |> noCmd
+            { model | avgDeg = min avgDeg (toFloat model.n - 1) } |> updateThresholdR |> noCmd
 
         InputGroundSpaceR x ->
             { model | groundSpaceR = inputToGroundSpaceR x } |> updatePoints |> noCmd
