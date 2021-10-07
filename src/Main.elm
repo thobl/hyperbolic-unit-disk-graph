@@ -36,6 +36,7 @@ type alias Model =
     , groundSpaceR : Float
     , avgDeg : Float
     , n : Int
+    , selectedVertex : Int
 
     -- derived information
     , points : List Point
@@ -56,6 +57,7 @@ init _ =
       , groundSpaceR = 8.5
       , avgDeg = 6
       , n = 200
+      , selectedVertex = 0
       , points = []
       , pointPairs = []
       , thresholdRadius = 1
@@ -129,6 +131,21 @@ radiallyIncreasing p1 p2 =
 
     else
         GT
+
+{-| This method allows us to sort a list of points in order of increasing
+angle.
+-}
+angleIncreasing : Point -> Point -> Order
+angleIncreasing p1 p2 =
+    if p1.polar.phi == p2.polar.phi then
+        EQ
+
+    else if p1.polar.phi < p2.polar.phi then
+        LT
+
+    else
+        GT
+
 
 
 {-| Given the information about the `canvasSize` and `groundSpaceR`, converts
@@ -359,6 +376,7 @@ type Msg
     = GeneratedPoints (List PointVirt)
     | InputCanvasSize Float
     | InputNrVertices Float
+    | InputSelectedVertex Float
     | InputAvgDeg Float
     | InputGroundSpaceR Float
 
@@ -371,6 +389,9 @@ update msg model =
 
         InputNrVertices n ->
             { model | n = round n } |> updatePoints |> noCmd
+
+        InputSelectedVertex v ->
+            { model | selectedVertex = round v } |> noCmd
 
         InputCanvasSize size ->
             { model | canvasSize = round size } |> updatePoints |> noCmd
@@ -468,6 +489,14 @@ viewNew model =
                     , valueFun = identity
                     , min = 10
                     , max = toFloat maxN
+                    }
+                , mySlider
+                    { label = "selected vertex"
+                    , onChange = InputSelectedVertex
+                    , value = toFloat model.selectedVertex
+                    , valueFun = identity
+                    , min = 0
+                    , max = toFloat model.n
                     }
                 , mySlider
                     { label = "average degree"
@@ -835,14 +864,21 @@ drawGroundSpace model =
 
 {-| Given the model, determines the point around which the hyperbolic circle
 should be drawn that represents the threshold radius.
+
+The vertex is given by the `selectedVertex` of the passed `model`.  The
+`selectedVertex` represents the index in the list of vertices sorted by angle.
+When the index is invalid, the origin will be returned.
 -}
 representativePoint : Model -> Point
 representativePoint model =
     let
+        -- Sort the vertices by angle.
         sortedPoints =
-            List.sortWith radiallyIncreasing model.points
+            List.sortWith angleIncreasing model.points
     in
-    case List.Extra.getAt 9 sortedPoints of
+    -- Try to get the selected vertex.
+    case List.Extra.getAt model.selectedVertex sortedPoints of
+        -- Return the origin if we were unable to get the point.
         Nothing ->
             toPoint model.canvasSize model.groundSpaceR (PointVirt 0 0)
 
