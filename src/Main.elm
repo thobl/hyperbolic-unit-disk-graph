@@ -6,6 +6,7 @@ import Element.Background as Background
 import Element.Font as Font
 import Element.Input exposing (defaultThumb, labelLeft, slider)
 import Html exposing (Html)
+import List.Extra exposing (zip)
 import Random
 import Svg exposing (circle, line)
 import Svg.Attributes exposing (cx, cy, r, stroke, x1, x2, y1, y2)
@@ -87,16 +88,62 @@ type alias PointVirt =
     { rVirt : Float, phi : Float }
 
 
-type alias Point =
-    -- Point in hyperbolic polar coordinates as well as canvas
-    -- coordinates.  Additionally sinh(r) and cosh(r) are preprocessed
-    -- for faster distance computation.
+type alias HyperbolicPoint =
+    -- Point in hyperbolic polar coordinates without.  Additionally sinh(r) and
+    -- cosh(r) are preprocessed for faster distance computation.
     { r : Float
     , phi : Float
     , sinhR : Float
     , coshR : Float
+    }
+
+
+{-| A convenience method to easily initialize a hyperbolic point.
+-}
+initHyperbolicPoint : Float -> Float -> HyperbolicPoint
+initHyperbolicPoint radius angle =
+    { r = radius
+    , phi = angle
+    , sinhR = sinh radius
+    , coshR = cosh radius
+    }
+
+
+type alias Point =
+    -- Point in hyperbolic polar coordinates as well as canvas coordinates.
+    { polar : HyperbolicPoint
     , x : Float
     , y : Float
+    }
+
+{-| This method allows us to sort a list of points in order of increasing
+radius.
+-}
+radiallyIncreasing : Point -> Point -> Order
+radiallyIncreasing p1 p2 =
+    if p1.polar.r == p2.polar.r then
+        EQ
+
+    else if p1.polar.r < p2.polar.r then
+        LT
+
+    else
+        GT
+
+
+{-| Given the information about the `canvasSize` and `groundSpaceR`, converts
+the `HyperbolicPoint` `point` to a `Point` that includes the canvas
+representation.
+-}
+hyperbolicPointToPoint : Int -> Float -> HyperbolicPoint -> Point
+hyperbolicPointToPoint canvasSize groundSpaceR point =
+    let
+        offset =
+            toFloat canvasSize / 2
+    in
+    { polar = point
+    , x = offset + offset * point.r / groundSpaceR * cos point.phi
+    , y = offset + offset * point.r / groundSpaceR * sin point.phi
     }
 
 
@@ -119,10 +166,7 @@ toPoint canvasSize groundSpaceR point =
         offset =
             toFloat canvasSize / 2
     in
-    { r = r
-    , phi = point.phi
-    , sinhR = sinh r
-    , coshR = cosh r
+    { polar = initHyperbolicPoint r point.phi
     , x = offset + offset * r / groundSpaceR * cos point.phi
     , y = offset + offset * r / groundSpaceR * sin point.phi
     }
@@ -147,7 +191,9 @@ acosh x =
     logBase e (x + sqrt (x - 1) * sqrt (x + 1))
 
 
-dist : Point -> Point -> Float
+{-| Computes the hyperbolic distance between two `HyperbolicPoint`s.
+-}
+dist : HyperbolicPoint -> HyperbolicPoint -> Float
 dist p1 p2 =
     let
         diff =
@@ -161,7 +207,102 @@ dist p1 p2 =
 
 pairDist : ( Point, Point ) -> Float
 pairDist pair =
-    dist (Tuple.first pair) (Tuple.second pair)
+    dist (Tuple.first pair).polar (Tuple.second pair).polar
+
+{-| Rotates a `HyperbolicPoint` `point` around the origin by the passed
+_positive_ `angle`.
+-}
+hyperbolicRotation : HyperbolicPoint -> Float -> HyperbolicPoint
+hyperbolicRotation point angle =
+    let
+        addedAngle =
+            point.phi + angle
+    in
+    if addedAngle < 2.0 * pi then
+        initHyperbolicPoint point.r addedAngle
+
+    else
+        initHyperbolicPoint point.r (addedAngle - 2.0 * pi)
+
+{-| Translates a `HyperbolicPoint` `point` by the passed `distance` along the
+x-axis.
+-}
+hyperbolicTranslation : HyperbolicPoint -> Float -> HyperbolicPoint
+hyperbolicTranslation point distance =
+    -- The point doesn't change when the distance is 0.
+    if distance == 0.0 then
+        point
+
+    else
+    -- We first deal with the cases where the point lies on the x-axis.
+    if
+        point.phi == 0.0
+    then
+        initHyperbolicPoint (abs (point.r + distance))
+            (if point.r + distance < 0.0 then
+                pi
+
+             else
+                0.0
+            )
+
+    else if point.phi == pi then
+        initHyperbolicPoint (abs (point.r - distance))
+            (if point.r - distance < 0.0 then
+                0.0
+
+             else
+                pi
+            )
+        -- Now we consider the case where the point does not lie on the x-axis.
+
+    else
+        let
+            referencePoint =
+                initHyperbolicPoint (abs distance)
+                    (if distance > 0.0 then
+                        pi
+
+                     else
+                        0.0
+                    )
+
+            movingPoint =
+                initHyperbolicPoint point.r
+                    (if point.phi > pi then
+                        2.0 * pi - point.phi
+
+                     else
+                        point.phi
+                    )
+
+            radius =
+                dist movingPoint referencePoint
+
+            enumerator =
+                (cosh (abs distance) * cosh radius) - cosh point.r
+
+            denominator =
+                sinh (abs distance) * sinh radius
+
+            angle =
+                acos (enumerator / denominator)
+
+            adjustedAngle =
+                if distance < 0.0 then
+                    pi - angle
+
+                else
+                    angle
+
+            mirroredAngle =
+                if point.phi > pi then
+                    2.0 * pi - adjustedAngle
+
+                else
+                    adjustedAngle
+        in
+        initHyperbolicPoint radius mirroredAngle
 
 
 
@@ -350,9 +491,10 @@ viewNew model =
                 (html
                     (canvas model.canvasSize
                         (drawGroundSpace model
-                            :: drawThresholdRadius model
-                            :: List.map drawPoint model.points
-                            ++ List.map drawLine (List.take nrEdges model.pointPairs)
+                            :: List.map (\x -> drawLine x "black") (List.take nrEdges model.pointPairs)
+                            ++ drawHyperbolicCircle model (representativePoint model) model.thresholdRadius "red"
+                            ++ List.map (\x -> drawPoint x "black") model.points
+                            ++ [ drawPoint (representativePoint model) "red" ]
                         )
                     )
                 )
@@ -555,18 +697,20 @@ canvas canvasSize =
         ]
 
 
-drawPoint : Point -> Svg.Svg msg
-drawPoint point =
+drawPoint : Point -> String -> Svg.Svg msg
+drawPoint point color =
     circle
         [ cx (String.fromFloat point.x)
         , cy (String.fromFloat point.y)
         , r "3"
+        , Svg.Attributes.fill color
+        , stroke color
         ]
         []
 
 
-drawLine : ( Point, Point ) -> Svg.Svg msg
-drawLine points =
+drawLine : ( Point, Point ) -> String -> Svg.Svg msg
+drawLine points color =
     let
         p1 =
             Tuple.first points
@@ -579,7 +723,7 @@ drawLine points =
         , y1 (String.fromFloat p1.y)
         , x2 (String.fromFloat p2.x)
         , y2 (String.fromFloat p2.y)
-        , stroke "black"
+        , stroke color
         ]
         []
 
@@ -596,6 +740,90 @@ drawCircle centerX centerY radius color =
         []
 
 
+{-| Returns a list of angles at at which we sample circle points. The closer we
+get to an angle of pi, the more fine-grained should the sampling be.
+The higher `nrSamples`, the more angles are added closer to pi.
+-}
+hyperbolicCircleSamples : Int -> List Float
+hyperbolicCircleSamples nrSamples =
+    let
+        -- We start with a set of uniformly distributed points.  This ensures
+        -- that we get nice round circles all around and not only close to pi.
+        uniformAngles =
+            List.map (\x -> toFloat x / 180.0 * Basics.pi) (List.range 0 359)
+
+        -- The angles whose consecutive distances get smaller as we approach pi.
+        detailAngles =
+            List.map
+                (\x ->
+                    let
+                        value =
+                            toFloat x
+                    in
+                    Basics.pi * value / sqrt (1 + (value * value))
+                )
+                (List.range 0 nrSamples)
+
+        -- When going from pi to 2 pi, we basically do the same thing but in
+        -- reverse.  We always want to be fine close to pi.
+        invertedDetailAngles =
+            List.map (\x -> 2.0 * Basics.pi - x) (List.reverse (List.drop 1 detailAngles))
+    in
+    -- Combine all angles.
+    List.sort (uniformAngles ++ detailAngles ++ invertedDetailAngles)
+
+
+{-| Returns the SVG elements that represent a circle of radius `radius` centered
+at the `point`. The element will have the passed `color`.
+-}
+drawHyperbolicCircle : Model -> Point -> Float -> String -> List (Svg.Svg msg)
+drawHyperbolicCircle model point radius color =
+    let
+        -- We adjust the number of samples used for drawing the circle depending
+        -- on the current `model.thresholdRadius`.  For a small radius, we are
+        -- rather Euclidean and do not need many sample points.
+        nrSamples =
+            Basics.ceiling ((model.thresholdRadius / model.groundSpaceR) * (model.thresholdRadius / model.groundSpaceR) * 1500)
+
+        -- The angles around the circle between which we draw lines.
+        angles =
+            hyperbolicCircleSamples nrSamples
+
+        -- The points on the circle between which the lines are drawn.
+        points =
+            List.map (\angle -> initHyperbolicPoint radius angle) angles
+
+        -- So far the circle was centered at the origin.  We now move the circle
+        -- to the passed `point`, by first translating it horizontally such that
+        -- the radial coordinate of the circle center matches the radial
+        -- coordinate of the `point`...
+        translatedPoints =
+            List.map (\hyperbolicPoint -> hyperbolicTranslation hyperbolicPoint point.polar.r) points
+
+        -- ... and then we rotate such that the angular coordinate of the circle
+        -- center matches the angular coordinate of the `point`.
+        rotatedPoints =
+            List.map (\hyperbolicPoint -> hyperbolicRotation hyperbolicPoint point.polar.phi) translatedPoints
+
+        -- So far these points were purely hyperbolic.  We now convert them to
+        -- be able to draw them on the canvas.
+        convertedPoints =
+            List.map (\hyperbolicPoint -> hyperbolicPointToPoint model.canvasSize model.groundSpaceR hyperbolicPoint) rotatedPoints
+
+        -- Now we have to get the lines between consecutive points on the
+        -- circle.  To this end, we shift the points one to the circle
+        -- cyclically by 1.
+        shiftedPoints =
+            List.drop 1 (List.Extra.cycle (List.length convertedPoints + 1) convertedPoints)
+
+        -- Finally, we get the pairs of consecutive points
+        pointPairs =
+            List.Extra.zip convertedPoints shiftedPoints
+    in
+    -- List.map drawLine (List.Extra.zip pointPairs (List.repeat (List.length pointPairs) color))
+    List.map (\x -> drawLine x color) pointPairs
+
+
 drawGroundSpace : Model -> Svg.Svg msg
 drawGroundSpace model =
     let
@@ -605,13 +833,18 @@ drawGroundSpace model =
     drawCircle offset offset offset "black"
 
 
-drawThresholdRadius : Model -> Svg.Svg msg
-drawThresholdRadius model =
+{-| Given the model, determines the point around which the hyperbolic circle
+should be drawn that represents the threshold radius.
+-}
+representativePoint : Model -> Point
+representativePoint model =
     let
-        offset =
-            toFloat model.canvasSize / 2
-
-        radius =
-            offset * model.thresholdRadius / model.groundSpaceR
+        sortedPoints =
+            List.sortWith radiallyIncreasing model.points
     in
-    drawCircle offset offset radius "gray"
+    case List.Extra.getAt 9 sortedPoints of
+        Nothing ->
+            toPoint model.canvasSize model.groundSpaceR (PointVirt 0 0)
+
+        Just p ->
+            p

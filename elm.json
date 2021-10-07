@@ -11,7 +11,8 @@
             "elm/html": "1.0.0",
             "elm/random": "1.0.0",
             "elm/svg": "1.0.1",
-            "mdgriffith/elm-ui": "1.1.8"
+            "mdgriffith/elm-ui": "1.1.8",
+            "elm-community/list-extra": "8.5.1"
         },
         "indirect": {
             "elm/json": "1.1.3",
