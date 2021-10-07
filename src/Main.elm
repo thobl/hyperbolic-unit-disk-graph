@@ -588,12 +588,14 @@ description model =
         , paragraph []
             [ wildcardText model """
 
-You see a disk of radius $groundSpaceR$ in the hyperbolic plane
-represented by the black circle.  This is the ground space.  Within the
-ground space, you see a graph with $n$ vertices and $m$ edges, where
-two vertices are connected by an edge if their hyperbolic distance
-does not exceed the threshold of $thresholdRadius$
-($thresholdRadiusRel$ times the radius of the ground space).
+You see a disk of radius $groundSpaceR$ in the hyperbolic plane represented by
+the black circle.  This is the ground space.  Within the ground space, you see a
+graph with $n$ vertices and $m$ edges, where two vertices are connected by an
+edge if their hyperbolic distance does not exceed the threshold of
+$thresholdRadius$ ($thresholdRadiusRel$ times the radius of the ground space).
+For the selected (red) vertex, this includes all vertices in the red circle.
+Move the "selected vertex" slider to the far right to select the center of the
+ground space.
 
 """
             ]
@@ -647,7 +649,7 @@ increase or decrease the ground space radius to get a clearer picture.
         , paragraph []
             [ wildcardText model """
 
-I choose the threshold distance (radius of the gray disk) such that
+I choose the threshold distance (radius of the red disk) such that
 the graph has average degree $avgDeg$.  If you increase the average
 degree, I will increase the threshold distance.
 
@@ -656,9 +658,8 @@ degree, I will increase the threshold distance.
         , paragraph []
             [ wildcardText model """
 
-If you increase the number of vertices, there will be less space
-available for each vertex.  To keep the average degree at $avgDeg$, I
-will decrease the threshold radius.
+If you increase the number of vertices, less space is available for each one.
+To keep the average degree at $avgDeg$, I will decrease the threshold radius.
 
 """
             ]

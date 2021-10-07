@@ -11629,7 +11629,7 @@ var $author$project$Main$description = function (model) {
 				_List_Nil,
 				_List_fromArray(
 					[
-						A2($author$project$Main$wildcardText, model, '\n\nYou see a disk of radius $groundSpaceR$ in the hyperbolic plane\nrepresented by the black circle.  This is the ground space.  Within the\nground space, you see a graph with $n$ vertices and $m$ edges, where\ntwo vertices are connected by an edge if their hyperbolic distance\ndoes not exceed the threshold of $thresholdRadius$\n($thresholdRadiusRel$ times the radius of the ground space).\n\n')
+						A2($author$project$Main$wildcardText, model, '\n\nYou see a disk of radius $groundSpaceR$ in the hyperbolic plane represented by\nthe black circle.  This is the ground space.  Within the ground space, you see a\ngraph with $n$ vertices and $m$ edges, where two vertices are connected by an\nedge if their hyperbolic distance does not exceed the threshold of\n$thresholdRadius$ ($thresholdRadiusRel$ times the radius of the ground space).\nFor the selected (red) vertex, this includes all vertices in the red circle.\nMove the "selected vertex" slider to the far right to select the center of the\nground space.\n\n')
 					])),
 				$author$project$Main$title2('How did you choose the vertex positions?'),
 				A2(
@@ -11653,14 +11653,14 @@ var $author$project$Main$description = function (model) {
 				_List_Nil,
 				_List_fromArray(
 					[
-						A2($author$project$Main$wildcardText, model, '\n\nI choose the threshold distance (radius of the gray disk) such that\nthe graph has average degree $avgDeg$.  If you increase the average\ndegree, I will increase the threshold distance.\n\n')
+						A2($author$project$Main$wildcardText, model, '\n\nI choose the threshold distance (radius of the red disk) such that\nthe graph has average degree $avgDeg$.  If you increase the average\ndegree, I will increase the threshold distance.\n\n')
 					])),
 				A2(
 				$mdgriffith$elm_ui$Element$paragraph,
 				_List_Nil,
 				_List_fromArray(
 					[
-						A2($author$project$Main$wildcardText, model, '\n\nIf you increase the number of vertices, there will be less space\navailable for each vertex.  To keep the average degree at $avgDeg$, I\nwill decrease the threshold radius.\n\n')
+						A2($author$project$Main$wildcardText, model, '\n\nIf you increase the number of vertices, less space is available for each one.\nTo keep the average degree at $avgDeg$, I will decrease the threshold radius.\n\n')
 					])),
 				A2(
 				$mdgriffith$elm_ui$Element$paragraph,
